@@ -1,3 +1,4 @@
+#pragma once
 //OpenCV2 imports
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui/highgui.hpp"
@@ -48,7 +49,7 @@ public:
 	}
 	void setImageByPath(char []);
 	void setImageByBitmap(InputArray);
-	Mat startProcess(float *, float *, const char *);
+	Mat startProcess(float *, float *, float *, float *, const char *);
 };
 
 void UFinder::setImageByBitmap(InputArray buffer) {
@@ -59,7 +60,7 @@ void UFinder::setImageByPath(char path[]) {
 	src = imread(path);
 }
 
-Mat UFinder::startProcess(float *x, float *y, const char *path = "_")
+Mat UFinder::startProcess(float *x, float *y, float *fromCenter, float *pixelsCenter, const char *path = "_")
 {
 	Mat src_gray;
 	RNG rng(12345);
@@ -158,8 +159,12 @@ Mat UFinder::startProcess(float *x, float *y, const char *path = "_")
 							//Calculate area and point of contour
 							mu[i] = moments(contours[i], false);
 
+							//Mass center
 							*x = (mu[i].m10 / mu[i].m00);
 							*y = (mu[i].m01 / mu[i].m00);
+							//Pixels from center
+							*fromCenter = *x - *pixelsCenter;
+
 							printf("Contour %d: Size - %d : Area - %.2f : Length - %.2f : Sides - %.2f : U depth - %.2f\n", i, contours[i].size(), area, length, sides, finDepth);
 
 							if (path != "_") {
@@ -192,13 +197,32 @@ Mat UFinder::startProcess(float *x, float *y, const char *path = "_")
 	return drawing;
 }
 
+float getDistance(float centerX, float centerY) {
+	//Center X is the correct pixel
+	centerY -= 20; //Either subtract or add to get the correct pixel, you want it right under the U or this could be 
+				   //Static so that you always get the depth of the bottom of the tower	
+	return 0;
+}
+
 int main() {
 	while (1) {
 		try {
 			printf("Started...\n");
 
+			//Get the mass center of the U - Location wise
 			float centerX = 0;
 			float centerY = 0;
+			//Pixels that the mass center is located from
+			float fromCenter = 0;
+			float pixelsWidth = 256; //X resolution divided by 2
+
+			float distance = 0; //
+
+			//Trigger 0 only when within these pixels
+			float LeftTrigger = -15;
+			float RightTrigger = 15;
+
+			int direction[2] = { 0, 0 };
 
 			UFinder find = UFinder();
 			find.setImageByPath("C:/Users/David/Desktop/pics/farthestMiddle.bmp");
@@ -208,9 +232,12 @@ int main() {
 			find.setSize(15, 145);
 			find.setSides(3, 10);
 			find.setDepth(40, 20, 90, 0, 10, 1000);
-			find.startProcess(&centerX, &centerY, "C:\\Users\\David\\Desktop\\ok.jpeg");
+			find.startProcess(&centerX, &centerY, &fromCenter, &pixelsWidth, "C:\\Users\\David\\Desktop\\ok.jpeg");
 
-			printf("CenterX: %.2f : CenterY: %.2f\n", centerX, centerY);
+			direction[0] = (fromCenter > LeftTrigger && fromCenter < RightTrigger) ? 0 : (fromCenter < LeftTrigger) ? 1 : 2; //Left right
+			direction[1] = getDistance(centerX, centerY); //Put the distance calculation here (Forward backward)
+
+			printf("CenterX: %.2f : CenterY: %.2f : fromCenter: %.2f : Direction: %d : Distance %.6f\n", centerX, centerY, fromCenter, direction[0], direction[1]);
 
 		} catch (Exception ignored) {
 			printf("Quiting cause of some error");
